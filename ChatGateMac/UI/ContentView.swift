@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var translatorStore: WebViewStore?
     
     private let stateManager = WebViewStateManager.shared
+    private let memoryManager = TabMemoryManager.shared
     
     private var currentStore: WebViewStore? {
         switch selectedTab {
@@ -31,10 +32,47 @@ struct ContentView: View {
     }
     
     private func loadTab(for tab: TabType) {
-        guard !loadedTabs.contains(tab) else { return }
+        guard !loadedTabs.contains(tab) else {
+            // Обновляем время доступа для уже загруженной вкладки
+            memoryManager.markTabAccessed(tab)
+            return
+        }
         
         loadedTabs.insert(tab)
         _ = getOrCreateStore(for: tab)
+        memoryManager.markTabAccessed(tab)
+    }
+    
+    private func unloadTab(_ tab: TabType) {
+        // Не выгружаем активную вкладку
+        guard tab != selectedTab else { return }
+        
+        print("🗑️ Выгружаем неактивную вкладку: \(tab.title)")
+        
+        // Останавливаем периодическое сохранение для YouTube
+        if tab == .youtube {
+            youtubeStore?.stopPeriodicSaving()
+        }
+        
+        // Удаляем store и вкладку из загруженных
+        switch tab {
+        case .chatGPT:
+            chatGPTStore = nil
+        case .youtube:
+            youtubeStore = nil
+        case .translator:
+            translatorStore = nil
+        }
+        
+        loadedTabs.remove(tab)
+    }
+    
+    private func setupMemoryManager() {
+        memoryManager.onTabShouldUnload = { tab in
+            DispatchQueue.main.async {
+                self.unloadTab(tab)
+            }
+        }
     }
     
     private func getOrCreateStore(for tab: TabType) -> WebViewStore {
@@ -100,6 +138,7 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear {
+                setupMemoryManager()
                 loadTab(for: .chatGPT)
             }
             .onChange(of: selectedTab) { oldValue, newValue in
@@ -120,6 +159,7 @@ struct ContentView: View {
                     TabButton(
                         title: tab.title,
                         icon: tab.icon,
+                        iconTime: loadedTabs.contains(tab) ? "timer" : "",
                         isSelected: selectedTab == tab
                     ) {
                         selectedTab = tab
@@ -174,7 +214,7 @@ struct ContentView: View {
                     .padding(.horizontal, 8)
                 }
             }
-            .frame(height: 30)
+            .frame(height: 32)
             .background(Color(nsColor: .controlBackgroundColor))
         }
     }
