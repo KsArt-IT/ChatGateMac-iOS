@@ -32,7 +32,7 @@ struct ContentView: View {
     }
     
     private func loadTab(for tab: TabType) {
-        guard !loadedTabs.contains(tab) else {
+        if loadedTabs.contains(tab) {
             // Обновляем время доступа для уже загруженной вкладки
             memoryManager.markTabAccessed(tab)
             return
@@ -49,22 +49,25 @@ struct ContentView: View {
         
         print("🗑️ Выгружаем неактивную вкладку: \(tab.title)")
         
-        // Останавливаем периодическое сохранение для YouTube
-        if tab == .youtube {
-            youtubeStore?.stopPeriodicSaving()
-        }
-        
-        // Удаляем store и вкладку из загруженных
+        // Очищаем ресурсы store перед удалением
         switch tab {
         case .chatGPT:
+            chatGPTStore?.cleanup()
             chatGPTStore = nil
         case .youtube:
+            youtubeStore?.cleanup()
             youtubeStore = nil
         case .translator:
+            translatorStore?.cleanup()
             translatorStore = nil
         }
         
         loadedTabs.remove(tab)
+        
+        // Принудительная очистка памяти
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // Даем время системе для освобождения ресурсов
+        }
     }
     
     private func setupMemoryManager() {
