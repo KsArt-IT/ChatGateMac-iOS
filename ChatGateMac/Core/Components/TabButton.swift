@@ -10,13 +10,19 @@ import SwiftUI
 struct TabButton: View {
     let title: String
     let icon: String
+    let iconTime: String
     let isSelected: Bool
     let action: () -> Void
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 2) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: 12))
+            
+            if isSelected || !iconTime.isEmpty {
+                Image(systemName: isSelected ? "target" : iconTime)
+                    .font(.system(size: 8))
+            }
 //            Text(title)
 //                .font(.caption)
         }
