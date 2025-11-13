@@ -37,11 +37,52 @@ class WebViewStore: ObservableObject {
     
     // Запуск периодического сохранения URL (для YouTube)
     func startPeriodicSaving() {
-        saveTimer?.invalidate()
+        stopPeriodicSaving() // Останавливаем предыдущий таймер
         saveTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.saveYouTubePosition()
+        }
+    }
+    
+    // Сохранение позиции YouTube видео
+    private func saveYouTubePosition() {
+        guard let webView = webView,
+              let urlString = webView.url?.absoluteString,
+              urlString.contains("youtube.com/watch") else { return }
+        
+        // JavaScript для получения текущей позиции видео
+        let script = """
+        (function() {
+            var video = document.querySelector('video');
+            if (video && !video.paused && video.currentTime > 0) {
+                return Math.floor(video.currentTime);
+            }
+            return null;
+        })();
+        """
+        
+        webView.evaluateJavaScript(script) { [weak self] result, error in
             guard let self = self,
-                  let url = self.webView?.url?.absoluteString else { return }
-            self.updateURL(url)
+                  let currentTime = result as? Int,
+                  currentTime > 0 else {
+                // Если не удалось получить позицию, сохраняем просто URL
+                self?.updateURL(urlString)
+                return
+            }
+            
+            // Добавляем временную метку в URL
+            var components = URLComponents(string: urlString)
+            var queryItems = components?.queryItems ?? []
+            
+            // Удаляем старую временную метку если есть
+            queryItems.removeAll { $0.name == "t" }
+            
+            // Добавляем новую временную метку
+            queryItems.append(URLQueryItem(name: "t", value: "\(currentTime)s"))
+            components?.queryItems = queryItems
+            
+            if let urlWithTime = components?.url?.absoluteString {
+                self.updateURL(urlWithTime)
+            }
         }
     }
     
@@ -50,7 +91,18 @@ class WebViewStore: ObservableObject {
         saveTimer = nil
     }
     
-    deinit {
+    // Очистка ресурсов
+    func cleanup() {
         stopPeriodicSaving()
+        webView?.stopLoading()
+        webView?.navigationDelegate = nil
+        webView?.uiDelegate = nil
+        webView = nil
+        saveURLCallback = nil
+    }
+    
+    deinit {
+        cleanup()
+        print("🗑️ WebViewStore деинициализирован")
     }
 }
