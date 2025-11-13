@@ -23,10 +23,19 @@ struct WebView: NSViewRepresentable {
         // Требуем действие пользователя для воспроизведения
         configuration.mediaTypesRequiringUserActionForPlayback = .all
         
+        // Используем default store для сохранения cookies и сессий
+        configuration.websiteDataStore = .default()
+        
+        // Общий process pool для всех WebView (экономия памяти)
+        configuration.processPool = WKProcessPool.shared
+        
         let webView = FullScreenWKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsMagnification = true
+        
+        // Оптимизация рендеринга
+        webView.configuration.preferences.minimumFontSize = 0
         
         webViewStore.webView = webView
         webView.load(URLRequest(url: url))
@@ -41,21 +50,34 @@ struct WebView: NSViewRepresentable {
         Coordinator(webViewStore: webViewStore)
     }
     
+    // Очистка при удалении
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        nsView.stopLoading()
+        nsView.navigationDelegate = nil
+        nsView.uiDelegate = nil
+        coordinator.cleanup()
+    }
+    
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
-        let webViewStore: WebViewStore
+        weak var webViewStore: WebViewStore? // Используем weak для избежания retain cycle
         
         init(webViewStore: WebViewStore) {
             self.webViewStore = webViewStore
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            webViewStore.canGoBack = webView.canGoBack
-            webViewStore.canGoForward = webView.canGoForward
+            webViewStore?.canGoBack = webView.canGoBack
+            webViewStore?.canGoForward = webView.canGoForward
             
             // Сохраняем текущий URL
             if let url = webView.url?.absoluteString {
-                webViewStore.updateURL(url)
+                webViewStore?.updateURL(url)
             }
+        }
+        
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            // Обработка ошибок для предотвращения утечек
+            print("⚠️ WebView navigation failed: \(error.localizedDescription)")
         }
         
         // Поддержка полноэкранного режима
@@ -70,7 +92,16 @@ struct WebView: NSViewRepresentable {
             }
             return nil
         }
+        
+        func cleanup() {
+            webViewStore = nil
+        }
     }
+}
+
+// Shared process pool для экономии памяти
+extension WKProcessPool {
+    static let shared = WKProcessPool()
 }
 
 // Кастомный WKWebView с поддержкой fullscreen
