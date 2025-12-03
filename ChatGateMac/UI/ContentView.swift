@@ -162,7 +162,7 @@ struct ContentView: View {
                     TabButton(
                         title: tab.title,
                         icon: tab.icon,
-                        iconTime: loadedTabs.contains(tab) ? "timer" : "",
+                        iconTime: loadedTabs.contains(tab) ? "timer" : "minus",
                         isSelected: selectedTab == tab
                     ) {
                         selectedTab = tab
