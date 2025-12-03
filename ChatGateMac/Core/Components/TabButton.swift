@@ -17,14 +17,15 @@ struct TabButton: View {
     var body: some View {
         VStack(spacing: 2) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.system(size: isSelected ? 16 : 12))
             
-            if isSelected || !iconTime.isEmpty {
-                Image(systemName: isSelected ? "target" : iconTime)
+            if !isSelected && !iconTime.isEmpty {
+                Image(systemName: iconTime)
                     .font(.system(size: 8))
+                    .foregroundColor(.gray)
             }
-//            Text(title)
-//                .font(.caption)
+            //            Text(title)
+            //                .font(.caption)
         }
         .frame(maxHeight: .infinity)
         .frame(width: 100)
