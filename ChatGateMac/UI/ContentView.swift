@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var isFullscreen = false
     @State private var showMenuBar = true
     @State private var menuBarTimer: Timer?
+    @State private var lastMouseMoveTime: Date = Date()
     
     private let stateManager = WebViewStateManager.shared
     private let memoryManager = TabMemoryManager.shared
@@ -174,6 +175,18 @@ struct ContentView: View {
     }
     
     private func showMenuBarTemporarily() {
+        // Не делаем ничего если меню уже показано
+        guard !showMenuBar else {
+            // Просто перезапускаем таймер если в fullscreen
+            if isFullscreen {
+                menuBarTimer?.invalidate()
+                menuBarTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { _ in
+                    hideMenuBar()
+                }
+            }
+            return
+        }
+        
         // Отменяем предыдущий таймер
         menuBarTimer?.invalidate()
         
@@ -182,7 +195,7 @@ struct ContentView: View {
             showMenuBar = true
         }
         
-        // Если в fullscreen режиме, скрываем через ... секунд
+        // Если в fullscreen режиме, скрываем через 10 секунд
         if isFullscreen {
             menuBarTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { _ in
                 hideMenuBar()
@@ -191,10 +204,16 @@ struct ContentView: View {
     }
     
     private func setupMouseTracking() {
-        // Отслеживание движения мыши
+        // Отслеживание движения мыши с debouncing
         NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .keyDown]) { event in
+            // Проверяем только если в fullscreen и меню скрыто
             if self.isFullscreen && !self.showMenuBar {
-                self.showMenuBarTemporarily()
+                // Debouncing - проверяем прошло ли 0.5 секунды с последнего события
+                let now = Date()
+                if now.timeIntervalSince(self.lastMouseMoveTime) > 0.5 {
+                    self.lastMouseMoveTime = now
+                    self.showMenuBarTemporarily()
+                }
             }
             return event
         }
