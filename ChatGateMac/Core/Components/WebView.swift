@@ -61,8 +61,128 @@ struct WebView: NSViewRepresentable {
         })();
         """
         
-        let userScript = WKUserScript(source: disableAutocorrectScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
-        configuration.userContentController.addUserScript(userScript)
+        // Полифилл для Fullscreen API (театральный режим для YouTube)
+        let fullscreenPolyfill = """
+        (function() {
+            var isTheaterMode = false;
+            
+            // Функция для входа в театральный режим
+            function enterTheaterMode() {
+                if (isTheaterMode) return;
+                isTheaterMode = true;
+                
+                // Создаем стили для театрального режима
+                var style = document.createElement('style');
+                style.id = 'yt-theater-mode-style';
+                style.textContent = `
+                    /* Скрываем все кроме плеера */
+                    ytd-masthead,
+                    #masthead-container,
+                    ytd-watch-metadata,
+                    #secondary,
+                    #related,
+                    ytd-comments,
+                    #comments,
+                    #below {
+                        display: none !important;
+                    }
+                    
+                    /* Растягиваем контейнер плеера */
+                    ytd-watch-flexy {
+                        min-height: 100vh !important;
+                    }
+                    
+                    #primary-inner {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+                    
+                    #player-theater-container,
+                    #player-container {
+                        width: 100vw !important;
+                        height: 100vh !important;
+                        max-width: 100vw !important;
+                        max-height: 100vh !important;
+                        position: fixed !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        z-index: 9999 !important;
+                        background: black !important;
+                    }
+                    
+                    #movie_player {
+                        width: 100% !important;
+                        height: 100% !important;
+                    }
+                    
+                    body {
+                        overflow: hidden !important;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // Функция для выхода из театрального режима
+            function exitTheaterMode() {
+                if (!isTheaterMode) return;
+                isTheaterMode = false;
+                
+                var style = document.getElementById('yt-theater-mode-style');
+                if (style) {
+                    style.remove();
+                }
+            }
+            
+            // Перехватываем requestFullscreen
+            Element.prototype.requestFullscreen = function() {
+                enterTheaterMode();
+                return Promise.resolve();
+            };
+            
+            Element.prototype.webkitRequestFullscreen = function() {
+                enterTheaterMode();
+                return Promise.resolve();
+            };
+            
+            Element.prototype.webkitRequestFullScreen = function() {
+                enterTheaterMode();
+                return Promise.resolve();
+            };
+            
+            // Перехватываем exitFullscreen
+            document.exitFullscreen = function() {
+                exitTheaterMode();
+                return Promise.resolve();
+            };
+            
+            document.webkitExitFullscreen = function() {
+                exitTheaterMode();
+                return Promise.resolve();
+            };
+            
+            // Обработчик клавиши Escape
+            document.addEventListener('keydown', function(e) {
+                if ((e.key === 'Escape' || e.keyCode === 27) && isTheaterMode) {
+                    exitTheaterMode();
+                }
+            }, true);
+            
+            // Эмулируем поддержку Fullscreen API
+            Object.defineProperty(document, 'fullscreenEnabled', {
+                get: function() { return true; }
+            });
+            
+            Object.defineProperty(document, 'webkitFullscreenEnabled', {
+                get: function() { return true; }
+            });
+        })();
+        """
+        
+        let autocorrectUserScript = WKUserScript(source: disableAutocorrectScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        let fullscreenUserScript = WKUserScript(source: fullscreenPolyfill, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        
+        configuration.userContentController.addUserScript(autocorrectUserScript)
+        configuration.userContentController.addUserScript(fullscreenUserScript)
         
         let webView = FullScreenWKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
