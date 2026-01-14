@@ -29,6 +29,41 @@ struct WebView: NSViewRepresentable {
         // Общий process pool для всех WebView (экономия памяти)
         configuration.processPool = WKProcessPool.shared
         
+        // Отключаем автозамену через JavaScript
+        let disableAutocorrectScript = """
+        (function() {
+            function disableAutocorrect(element) {
+                element.setAttribute('autocorrect', 'off');
+                element.setAttribute('autocapitalize', 'off');
+                element.setAttribute('spellcheck', 'false');
+            }
+            
+            // Применяем к существующим элементам
+            document.addEventListener('DOMContentLoaded', function() {
+                document.querySelectorAll('input, textarea, [contenteditable]').forEach(disableAutocorrect);
+            });
+            
+            // Наблюдаем за новыми элементами
+            new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1) {
+                            if (node.matches && node.matches('input, textarea, [contenteditable]')) {
+                                disableAutocorrect(node);
+                            }
+                            if (node.querySelectorAll) {
+                                node.querySelectorAll('input, textarea, [contenteditable]').forEach(disableAutocorrect);
+                            }
+                        }
+                    });
+                });
+            }).observe(document.documentElement, { childList: true, subtree: true });
+        })();
+        """
+        
+        let userScript = WKUserScript(source: disableAutocorrectScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        configuration.userContentController.addUserScript(userScript)
+        
         let webView = FullScreenWKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
