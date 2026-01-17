@@ -204,19 +204,46 @@ struct ContentView: View {
     }
     
     private func setupMouseTracking() {
-        // Отслеживание движения мыши с debouncing
+        // Отслеживание движения мыши с debouncing и проверкой области окна
         NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .keyDown]) { event in
             // Проверяем только если в fullscreen и меню скрыто
             if self.isFullscreen && !self.showMenuBar {
-                // Debouncing - проверяем прошло ли 0.5 секунды с последнего события
-                let now = Date()
-                if now.timeIntervalSince(self.lastMouseMoveTime) > 0.5 {
-                    self.lastMouseMoveTime = now
-                    self.showMenuBarTemporarily()
+                // Проверяем, что курсор находится над окном приложения
+                if self.isMouseOverAppWindow(event: event) {
+                    // Debouncing - проверяем прошло ли 0.5 секунды с последнего события
+                    let now = Date()
+                    if now.timeIntervalSince(self.lastMouseMoveTime) > 0.5 {
+                        self.lastMouseMoveTime = now
+                        self.showMenuBarTemporarily()
+                    }
                 }
             }
             return event
         }
+    }
+    
+    private func isMouseOverAppWindow(event: NSEvent) -> Bool {
+        guard let window = NSApplication.shared.windows.first else { return false }
+        
+        // Получаем координаты мыши в глобальной системе координат
+        let mouseLocation = NSEvent.mouseLocation
+        
+        // Получаем границы окна в глобальной системе координат
+        let windowFrame = window.frame
+        
+        // Проверяем, находится ли курсор внутри окна
+        guard windowFrame.contains(mouseLocation) else { return false }
+        
+        // Дополнительно проверяем, что курсор в нижней части окна (100 пикселей от низа)
+        let bottomTriggerHeight: CGFloat = 100
+        let bottomTriggerArea = NSRect(
+            x: windowFrame.minX,
+            y: windowFrame.minY,
+            width: windowFrame.width,
+            height: bottomTriggerHeight
+        )
+        
+        return bottomTriggerArea.contains(mouseLocation)
     }
     
     private func setupFullscreenObserver() {
