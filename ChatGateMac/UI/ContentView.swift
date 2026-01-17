@@ -7,6 +7,25 @@
 
 import SwiftUI
 
+// VisualEffectView для полупрозрачного фона
+struct VisualEffectView: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+    
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let visualEffectView = NSVisualEffectView()
+        visualEffectView.material = material
+        visualEffectView.blendingMode = blendingMode
+        visualEffectView.state = .active
+        return visualEffectView
+    }
+    
+    func updateNSView(_ visualEffectView: NSVisualEffectView, context: Context) {
+        visualEffectView.material = material
+        visualEffectView.blendingMode = blendingMode
+    }
+}
+
 struct ContentView: View {
     @State private var selectedTab: TabType = .chatGPT
     @State private var youtubeURL: String = ""
@@ -26,9 +45,9 @@ struct ContentView: View {
     
     private var currentStore: WebViewStore? {
         switch selectedTab {
-        case .chatGPT: return chatGPTStore
-        case .youtube: return youtubeStore
-        case .translator: return translatorStore
+        case .chatGPT: chatGPTStore
+        case .youtube: youtubeStore
+        case .translator: translatorStore
         }
     }
     
@@ -297,8 +316,8 @@ struct ContentView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Основной контент - View создаются лениво при первом обращении
+        ZStack {
+            // Основной контент - занимает весь экран
             ZStack {
                 if loadedTabs.contains(.chatGPT), let store = chatGPTStore {
                     ChatGPTView(webViewStore: store)
@@ -330,93 +349,102 @@ struct ContentView: View {
                 loadTab(for: newValue)
             }
             
-            // Панель переключения и управления внизу
+            // Overlay меню - плавает поверх контента
             if showMenuBar {
-                menuBarView
+                VStack {
+                    Spacer()
+                    overlayMenuBar
+                }
+                .zIndex(100)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
     }
     
-    private var menuBarView: some View {
+    private var overlayMenuBar: some View {
         HStack(spacing: 0) {
-                // Отступ слева для центрирования кнопок вкладок
-                if selectedTab == .youtube {
-                    Spacer()
-                        .frame(width: 312) // Ширина строки ввода + кнопка play
+            // Отступ слева для центрирования кнопок вкладок
+            if selectedTab == .youtube {
+                Spacer()
+                    .frame(width: 312) // Ширина строки ввода + кнопка play
+            }
+            
+            // Кнопки переключения вкладок
+            ForEach(TabType.allCases, id: \.self) { tab in
+                TabButton(
+                    title: tab.title,
+                    icon: tab.icon,
+                    iconTime: loadedTabs.contains(tab) ? "timer" : "minus",
+                    isSelected: selectedTab == tab
+                ) {
+                    selectedTab = tab
                 }
-                
-                // Кнопки переключения вкладок
-                ForEach(TabType.allCases, id: \.self) { tab in
-                    TabButton(
-                        title: tab.title,
-                        icon: tab.icon,
-                        iconTime: loadedTabs.contains(tab) ? "timer" : "minus",
-                        isSelected: selectedTab == tab
-                    ) {
-                        selectedTab = tab
-                    }
-                }
+            }
+            Divider()
+                .frame(height: 30)
+                .padding(.horizontal, 8)
+            
+            // Кнопки управления WebView
+            Button(action: { currentStore?.goBack() }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16))
+            }
+            .disabled(currentStore?.canGoBack != true)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            
+            Button(action: { currentStore?.goForward() }) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16))
+            }
+            .disabled(currentStore?.canGoForward != true)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            
+            Button(action: { currentStore?.reload() }) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 16))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            
+            // Кнопка fullscreen для окна
+            Button(action: toggleFullscreen) {
+                Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 16))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            
+            // Строка ввода для ютуб плеера
+            if selectedTab == .youtube {
                 Divider()
                     .frame(height: 30)
                     .padding(.horizontal, 8)
                 
-                // Кнопки управления WebView
-                Button(action: { currentStore?.goBack() }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16))
-                }
-                .disabled(currentStore?.canGoBack != true)
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                
-                Button(action: { currentStore?.goForward() }) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 16))
-                }
-                .disabled(currentStore?.canGoForward != true)
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                
-                Button(action: { currentStore?.reload() }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                
-                // Кнопка fullscreen для окна
-                Button(action: toggleFullscreen) {
-                    Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                
-                // Строка ввода для ютуб плеера
-                if selectedTab == .youtube {
-                    Divider()
-                        .frame(height: 30)
-                        .padding(.horizontal, 8)
-                    
-                    TextField("URL или ID видео", text: $youtubeURL)
-                        .textFieldStyle(.plain)
-                        .frame(width: 250)
-                        .padding(.horizontal, 8)
-                        .onSubmit {
-                            openYouTubeURL()
-                        }
-                    
-                    Button(action: openYouTubeURL) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
+                TextField("URL или ID видео", text: $youtubeURL)
+                    .textFieldStyle(.plain)
+                    .frame(width: 250)
                     .padding(.horizontal, 8)
+                    .onSubmit {
+                        openYouTubeURL()
+                    }
+                
+                Button(action: openYouTubeURL) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 14))
                 }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 8)
             }
-            .frame(height: 32)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .transition(.move(edge: .bottom))
+        }
+        .frame(height: 32)
+        .background(
+            // Полупрозрачный фон с размытием для лучшей видимости
+            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                .cornerRadius(8)
+        )
+        .padding(.horizontal, 16)
     }
 }
 
